@@ -4,7 +4,6 @@
   "framework": "vite",
   "devCommand": "vite",
   "installCommand": "npm install",
-  "nodeVersion": "20.x",
   "env": {
     "VITE_SUPABASE_URL": {
       "description": "URL del proyecto Supabase (https://supabase.com)"
