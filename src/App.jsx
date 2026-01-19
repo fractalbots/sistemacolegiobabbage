@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, Save, Trash2, Edit2, LogOut, User, BookOpen, GraduationCap, Menu, BarChart3, Users, FileText, Settings, X } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
+import { supabase } from './supabaseClient';
 
 // Logo de Charles Babbage - SVG
 const LogoCharlesBabbage = ({ size = 64 }) => (
@@ -134,11 +135,57 @@ const SistemaCalificaciones = () => {
   }, [alumnos, docentes, asignaturas, isLoggedIn]);
 
   const cargarDatos = async () => {
-    // Los datos están en estado local
+    try {
+      // Cargar alumnos
+      const { data: alumnosData, error: alumnosError } = await supabase
+        .from('alumnos')
+        .select('*');
+      if (alumnosError) throw alumnosError;
+      if (alumnosData && alumnosData.length > 0) {
+        setAlumnos(alumnosData);
+      }
+
+      // Cargar docentes
+      const { data: docentesData, error: docentesError } = await supabase
+        .from('docentes')
+        .select('*');
+      if (docentesError) throw docentesError;
+      if (docentesData && docentesData.length > 0) {
+        setDocentes(docentesData);
+      }
+
+      // Cargar asignaturas
+      const { data: asignaturasData, error: asignaturasError } = await supabase
+        .from('asignaturas')
+        .select('*');
+      if (asignaturasError) throw asignaturasError;
+      if (asignaturasData && asignaturasData.length > 0) {
+        setAsignaturas(asignaturasData);
+      }
+    } catch (error) {
+      console.warn('Error cargando datos de Supabase (usando datos locales):', error.message);
+    }
   };
 
   const guardarDatos = async () => {
-    // Los datos se guardan automáticamente en estado local
+    try {
+      // Guardar alumnos
+      await supabase
+        .from('alumnos')
+        .upsert(alumnos, { onConflict: 'id' });
+
+      // Guardar docentes
+      await supabase
+        .from('docentes')
+        .upsert(docentes, { onConflict: 'id' });
+
+      // Guardar asignaturas
+      await supabase
+        .from('asignaturas')
+        .upsert(asignaturas, { onConflict: 'id' });
+    } catch (error) {
+      console.error('Error guardando datos en Supabase:', error.message);
+    }
   };
 
   // Función para descargar PDF de calificaciones
@@ -200,7 +247,7 @@ const SistemaCalificaciones = () => {
   };
 
   // ========== FUNCIONES ALUMNOS ==========
-  const agregarAlumno = () => {
+  const agregarAlumno = async () => {
     if (!formAlumno.nombre || !formAlumno.apellido || !formAlumno.cedula || !formAlumno.curso) {
       alert('Por favor completa todos los campos obligatorios');
       return;
@@ -222,14 +269,33 @@ const SistemaCalificaciones = () => {
       mensajeBloqueo: formAlumno.mensajeBloqueo || ''
     };
 
-    if (editandoAlumno) {
-      setAlumnos(alumnos.map(a => a.id === editandoAlumno.id ? { ...editandoAlumno, ...nuevoAlumno } : a));
-      setEditandoAlumno(null);
-      alert(`✅ Alumno actualizado\n\nCredenciales de acceso:\nUsuario: ${usuario}\nContraseña: ${password}`);
-    } else {
-      setAlumnos([...alumnos, nuevoAlumno]);
-      alert(`✅ Alumno agregado\n\nCredenciales de acceso:\nUsuario: ${usuario}\nContraseña: ${password}\n\n⚠️ Comparte estas credenciales con el estudiante`);
+    try {
+      if (editandoAlumno) {
+        // Actualizar en Supabase
+        const { error } = await supabase
+          .from('alumnos')
+          .update(nuevoAlumno)
+          .eq('id', editandoAlumno.id);
+        
+        if (error) throw error;
+        setAlumnos(alumnos.map(a => a.id === editandoAlumno.id ? { ...editandoAlumno, ...nuevoAlumno } : a));
+        setEditandoAlumno(null);
+        alert(`✅ Alumno actualizado\n\nCredenciales de acceso:\nUsuario: ${usuario}\nContraseña: ${password}`);
+      } else {
+        // Insertar en Supabase
+        const { error } = await supabase
+          .from('alumnos')
+          .insert([nuevoAlumno]);
+        
+        if (error) throw error;
+        setAlumnos([...alumnos, nuevoAlumno]);
+        alert(`✅ Alumno agregado\n\nCredenciales de acceso:\nUsuario: ${usuario}\nContraseña: ${password}\n\n⚠️ Comparte estas credenciales con el estudiante`);
+      }
+    } catch (error) {
+      console.error('Error guardando alumno:', error);
+      alert('❌ Error al guardar alumno: ' + error.message);
     }
+    
     setFormAlumno({ nombre: '', apellido: '', cedula: '', email: '', curso: '', bloqueado: false, mensajeBloqueo: '' });
   };
 
@@ -238,14 +304,25 @@ const SistemaCalificaciones = () => {
     setEditandoAlumno(alumno);
   };
 
-  const eliminarAlumno = (id) => {
+  const eliminarAlumno = async (id) => {
     if (confirm('¿Estás seguro de eliminar este alumno?')) {
-      setAlumnos(alumnos.filter(a => a.id !== id));
+      try {
+        const { error } = await supabase
+          .from('alumnos')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+        setAlumnos(alumnos.filter(a => a.id !== id));
+      } catch (error) {
+        console.error('Error eliminando alumno:', error);
+        alert('❌ Error al eliminar alumno: ' + error.message);
+      }
     }
   };
 
   // ========== FUNCIONES DOCENTES ==========
-  const agregarDocente = () => {
+  const agregarDocente = async () => {
     if (!formDocente.nombre || !formDocente.usuario || !formDocente.password) {
       alert('Por favor completa los campos obligatorios');
       return;
@@ -258,14 +335,31 @@ const SistemaCalificaciones = () => {
       cambiosBloqueados: formDocente.cambiosBloqueados || false
     };
 
-    if (editandoDocente) {
-      setDocentes(docentes.map(d => d.id === editandoDocente.id ? { ...editandoDocente, ...nuevoDocente } : d));
-      setEditandoDocente(null);
-      alert('Docente actualizado');
-    } else {
-      setDocentes([...docentes, nuevoDocente]);
-      alert('Docente agregado');
+    try {
+      if (editandoDocente) {
+        const { error } = await supabase
+          .from('docentes')
+          .update(nuevoDocente)
+          .eq('id', editandoDocente.id);
+        
+        if (error) throw error;
+        setDocentes(docentes.map(d => d.id === editandoDocente.id ? { ...editandoDocente, ...nuevoDocente } : d));
+        setEditandoDocente(null);
+        alert('Docente actualizado');
+      } else {
+        const { error } = await supabase
+          .from('docentes')
+          .insert([nuevoDocente]);
+        
+        if (error) throw error;
+        setDocentes([...docentes, nuevoDocente]);
+        alert('Docente agregado');
+      }
+    } catch (error) {
+      console.error('Error guardando docente:', error);
+      alert('❌ Error al guardar docente: ' + error.message);
     }
+    
     setFormDocente({ nombre: '', apellido: '', cedula: '', email: '', usuario: '', password: '', asignaturas: [], cambiosBloqueados: false });
   };
 
@@ -283,17 +377,43 @@ const SistemaCalificaciones = () => {
     setEditandoDocente(docente);
   };
 
-  const eliminarDocente = (id) => {
+  const eliminarDocente = async (id) => {
     if (confirm('¿Estás seguro de eliminar este docente?')) {
-      setDocentes(docentes.filter(d => d.id !== id));
+      try {
+        const { error } = await supabase
+          .from('docentes')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+        setDocentes(docentes.filter(d => d.id !== id));
+      } catch (error) {
+        console.error('Error eliminando docente:', error);
+        alert('❌ Error al eliminar docente: ' + error.message);
+      }
     }
   };
 
-  const toggleBloqueoDocente = (docenteId) => {
-    setDocentes(docentes.map(d => 
-      d.id === docenteId ? { ...d, cambiosBloqueados: !d.cambiosBloqueados } : d
-    ));
-    alert('Estado de bloqueo actualizado');
+  const toggleBloqueoDocente = async (docenteId) => {
+    try {
+      const docente = docentes.find(d => d.id === docenteId);
+      const nuevoEstado = !docente.cambiosBloqueados;
+      
+      const { error } = await supabase
+        .from('docentes')
+        .update({ cambiosBloqueados: nuevoEstado })
+        .eq('id', docenteId);
+      
+      if (error) throw error;
+      
+      setDocentes(docentes.map(d => 
+        d.id === docenteId ? { ...d, cambiosBloqueados: nuevoEstado } : d
+      ));
+      alert('Estado de bloqueo actualizado');
+    } catch (error) {
+      console.error('Error actualizando bloqueo:', error);
+      alert('❌ Error al actualizar bloqueo: ' + error.message);
+    }
   };
 
   // Guardar nota (docente)
@@ -325,7 +445,7 @@ const SistemaCalificaciones = () => {
   };
 
   // ========== FUNCIONES ASIGNATURAS ==========
-  const agregarAsignatura = () => {
+  const agregarAsignatura = async () => {
     if (!formAsignatura.nombre || !formAsignatura.docente || !formAsignatura.curso) {
       alert('Por favor completa todos los campos');
       return;
@@ -338,14 +458,31 @@ const SistemaCalificaciones = () => {
       curso: formAsignatura.curso
     };
 
-    if (editandoAsignatura) {
-      setAsignaturas(asignaturas.map(a => a.id === editandoAsignatura.id ? { ...editandoAsignatura, ...nuevaAsignatura } : a));
-      setEditandoAsignatura(null);
-      alert('Asignatura actualizada');
-    } else {
-      setAsignaturas([...asignaturas, nuevaAsignatura]);
-      alert('Asignatura agregada');
+    try {
+      if (editandoAsignatura) {
+        const { error } = await supabase
+          .from('asignaturas')
+          .update(nuevaAsignatura)
+          .eq('id', editandoAsignatura.id);
+        
+        if (error) throw error;
+        setAsignaturas(asignaturas.map(a => a.id === editandoAsignatura.id ? { ...editandoAsignatura, ...nuevaAsignatura } : a));
+        setEditandoAsignatura(null);
+        alert('Asignatura actualizada');
+      } else {
+        const { error } = await supabase
+          .from('asignaturas')
+          .insert([nuevaAsignatura]);
+        
+        if (error) throw error;
+        setAsignaturas([...asignaturas, nuevaAsignatura]);
+        alert('Asignatura agregada');
+      }
+    } catch (error) {
+      console.error('Error guardando asignatura:', error);
+      alert('❌ Error al guardar asignatura: ' + error.message);
     }
+    
     setFormAsignatura({ nombre: '', docente: '', curso: '' });
   };
 
@@ -354,9 +491,20 @@ const SistemaCalificaciones = () => {
     setEditandoAsignatura(asignatura);
   };
 
-  const eliminarAsignatura = (id) => {
+  const eliminarAsignatura = async (id) => {
     if (confirm('¿Estás seguro de eliminar esta asignatura?')) {
-      setAsignaturas(asignaturas.filter(a => a.id !== id));
+      try {
+        const { error } = await supabase
+          .from('asignaturas')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+        setAsignaturas(asignaturas.filter(a => a.id !== id));
+      } catch (error) {
+        console.error('Error eliminando asignatura:', error);
+        alert('❌ Error al eliminar asignatura: ' + error.message);
+      }
     }
   };
 
