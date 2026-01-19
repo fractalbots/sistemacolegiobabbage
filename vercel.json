@@ -4,14 +4,6 @@
   "framework": "vite",
   "devCommand": "vite",
   "installCommand": "npm install",
-  "env": {
-    "VITE_SUPABASE_URL": {
-      "description": "URL del proyecto Supabase (https://supabase.com)"
-    },
-    "VITE_SUPABASE_ANON_KEY": {
-      "description": "Clave anónima pública de Supabase"
-    }
-  },
   "headers": [
     {
       "source": "/dist/(.*)",
