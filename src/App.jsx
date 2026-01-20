@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Plus, Save, Trash2, Edit2, LogOut, User, BookOpen, GraduationCap, Menu, BarChart3, Users, FileText, Settings, X } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { supabase } from './supabaseClient';
+import AsignarMateriasProfesor from './components/AsignarMateriasProfesor';
 
 // Logo de Charles Babbage - SVG
 const LogoCharlesBabbage = ({ size = 64 }) => (
@@ -78,6 +79,8 @@ const SistemaCalificaciones = () => {
     cambiosBloqueados: false
   });
   const [editandoDocente, setEditandoDocente] = useState(null);
+  const [mostrarAsignarMaterias, setMostrarAsignarMaterias] = useState(false);
+  const [profesorSeleccionado, setProfessorSeleccionado] = useState(null);
   
   // Estados para cálculo de notas
   const [notasActual, setNotasActual] = useState({
@@ -414,6 +417,16 @@ const SistemaCalificaciones = () => {
       console.error('Error actualizando bloqueo:', error);
       alert('❌ Error al actualizar bloqueo: ' + error.message);
     }
+  };
+
+  const abrirAsignarMaterias = (docente) => {
+    setProfessorSeleccionado(docente);
+    setMostrarAsignarMaterias(true);
+  };
+
+  const cerrarAsignarMaterias = () => {
+    setMostrarAsignarMaterias(false);
+    setProfessorSeleccionado(null);
   };
 
   // Guardar nota (docente)
@@ -1318,13 +1331,20 @@ const SistemaCalificaciones = () => {
                                 <span className="inline-block bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">ACTIVO</span>
                               )}
                             </td>
-                            <td className="py-3 px-4 text-center space-x-2">
+                            <td className="py-3 px-4 text-center space-x-2 flex flex-wrap gap-1 justify-center">
+                              <button 
+                                onClick={() => abrirAsignarMaterias(docente)}
+                                className="px-3 py-1 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition"
+                                title="Asignar Materias"
+                              >
+                                📚 Materias
+                              </button>
                               <button 
                                 onClick={() => toggleBloqueoDocente(docente.id)} 
                                 className={`px-3 py-1 rounded text-xs font-bold transition ${docente.cambiosBloqueados ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'}`}
                                 title={docente.cambiosBloqueados ? 'Desbloquear' : 'Bloquear'}
                               >
-                                {docente.cambiosBloqueados ? '🔒 Desbloquear' : '🔓 Bloquear'}
+                                {docente.cambiosBloqueados ? '🔒' : '🔓'}
                               </button>
                               <button onClick={() => editarDocente(docente)} className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded transition" title="Editar"><Edit2 className="w-4 h-4 inline" /></button>
                               <button onClick={() => eliminarDocente(docente.id)} className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded transition" title="Eliminar"><Trash2 className="w-4 h-4 inline" /></button>
@@ -2052,6 +2072,19 @@ const SistemaCalificaciones = () => {
             </div>
           )}
         </div>
+
+        {/* Modal de Asignación de Materias */}
+        {mostrarAsignarMaterias && profesorSeleccionado && (
+          <AsignarMateriasProfesor
+            profesorId={profesorSeleccionado.id}
+            profesorNombre={`${profesorSeleccionado.nombre} ${profesorSeleccionado.apellido}`}
+            onClose={cerrarAsignarMaterias}
+            onSuccess={() => {
+              cerrarAsignarMaterias();
+              alert('✅ Materias asignadas exitosamente al profesor');
+            }}
+          />
+        )}
       </div>
     </div>
   );
