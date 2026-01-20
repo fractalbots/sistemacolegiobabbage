@@ -402,36 +402,81 @@ export const obtenerDocentesConAsignaciones = async () => {
 
 /**
  * Crear o actualizar un alumno
- * @param {object} alumnoData - {nombre, apellido, cedula, email, curso_id, usuario, password_hash, bloqueado, mensajeBloqueo}
+ * @param {object} alumnoData - {nombre, apellido, cedula, email, usuario, password_hash, curso_id, bloqueado, mensaje_bloqueo}
  * @param {number} alumnoId - ID del alumno (opcional, si se proporciona actualiza)
  */
 export const guardarAlumno = async (alumnoData, alumnoId = null) => {
   try {
-    const datos = {
-      ...alumnoData,
-      updated_at: new Date().toISOString()
+    let usuarioId;
+
+    // Separar datos de usuario y alumno
+    const datosUsuario = {
+      nombre: alumnoData.nombre,
+      apellido: alumnoData.apellido,
+      email: alumnoData.email,
+      usuario: alumnoData.usuario,
+      rol: 'estudiante',
+      activo: true
     };
 
-    let response;
+    const datosAlumno = {
+      cedula: alumnoData.cedula,
+      curso_id: alumnoData.curso_id,
+      bloqueado: alumnoData.bloqueado || false,
+      mensaje_bloqueo: alumnoData.mensaje_bloqueo || null,
+      activo: true
+    };
+
     if (alumnoId) {
-      // Actualizar
-      response = await supabase
+      // Actualizar alumno existente
+      const { data: alumnoActual, error: errorActual } = await supabase
         .from('alumnos')
-        .update(datos)
+        .select('usuario_id')
+        .eq('id', alumnoId)
+        .single();
+
+      if (errorActual) throw errorActual;
+
+      usuarioId = alumnoActual.usuario_id;
+
+      // Actualizar usuario
+      await supabase
+        .from('usuarios')
+        .update(datosUsuario)
+        .eq('id', usuarioId);
+
+      // Actualizar alumno
+      const { data, error } = await supabase
+        .from('alumnos')
+        .update(datosAlumno)
         .eq('id', alumnoId)
         .select();
+
+      if (error) throw error;
+      return { success: true, data: data[0] };
     } else {
-      // Crear
-      response = await supabase
-        .from('alumnos')
-        .insert([datos])
+      // Crear nuevo usuario primero
+      const { data: usuarioNuevo, error: errorUsuario } = await supabase
+        .from('usuarios')
+        .insert([datosUsuario])
         .select();
+
+      if (errorUsuario) throw errorUsuario;
+
+      usuarioId = usuarioNuevo[0].id;
+
+      // Crear alumno asociado al usuario
+      const { data, error } = await supabase
+        .from('alumnos')
+        .insert([{
+          ...datosAlumno,
+          usuario_id: usuarioId
+        }])
+        .select();
+
+      if (error) throw error;
+      return { success: true, data: data[0] };
     }
-
-    const { data, error } = response;
-
-    if (error) throw error;
-    return { success: true, data: data[0] };
   } catch (error) {
     console.error('Error guardando alumno:', error);
     return { success: false, error: error.message };
